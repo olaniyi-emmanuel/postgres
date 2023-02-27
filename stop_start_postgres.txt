@@ -1,0 +1,81 @@
+How To Stop, Start, Restart and Reload PostgreSQL Service
+
+
+Set up the environmental variable
+
+export PATH=$PATH:/usr/pgsql-13/bin
+
+restart or reload is required when changes are made to the postgresql.conf file.
+
+From where could we find the info which parameter does require a reload or restart ?
+You can find information on the right side of the parameters in the postgresql.conf file that require restart or reload.
+
+
+For example, let modify the  for max_connection parameter as below.
+
+max_connections = 200               # (change requires restart)
+
+For Debian: Use  
+# pg_ctlcluster 14 main status
+
+
+
+Method 1
+
+check PostgreSQL service name and restart  it
+
+
+ps -ef|grep -i postgres
+systemctl status postgresql-12
+systemctl restart postgresql-12
+systemctl status postgresql-12
+
+
+Method 2
+
+You can use the pg_ctl command as  the postgres OS user.
+
+The pgsql-10 value in the following commands will change according to your version.
+
+pg_ctl stop -D /var/lib/pgsql/13/data/
+pg_ctl start -D /postgres/pg_data
+pg_ctl restart -D /postgres/pg_data
+pg_ctl status -D /postgres/pg_data
+pg_ctl reload -D /postgres/pg_data
+
+
+
+/usr/pgsql-13/bin/pg_ctl  --help
+/usr/pgsql-13/bin/pg_ctl stop -D /var/lib/pgsql/13/data/
+/usr/pgsql-13/bin/pg_ctl status -D /var/lib/pgsql/13/data/
+/usr/pgsql-13/bin/pg_ctl start -D /var/lib/pgsql/13/data/
+
+
+echo $PATH
+export PATH=$PATH:/usr/pgsql-13/bin/
+
+How to check if postgresql is ready to accept the connections.
+
+pg_isready
+pg_isready — check the connection status of a PostgreSQL server
+
+
+pg_isready is a utility for checking the connection status of a PostgreSQL database server. The exit status specifies the result of the connection check.
+
+
+Standard Usage:
+
+$ pg_isready
+/tmp:5432 - accepting connections
+$ echo $?
+0
+Running with connection parameters to a PostgreSQL cluster in startup:
+
+$ pg_isready -h localhost -p 5432
+localhost:5433 - rejecting connections
+$ echo $?
+1
+Running with connection parameters to a non-responsive PostgreSQL cluster:
+
+$ pg_isready -h someremotehost
+someremotehost:5432 - no response
