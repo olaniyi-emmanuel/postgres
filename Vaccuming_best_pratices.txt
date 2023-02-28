@@ -1,0 +1,169 @@
+Vacuuming is used for periodic maintenance of PostgreSQL databases.
+Generally, it is enough to let vacuuming be performed by the Autovaccum daemon which is the default one.
+
+You might need to adjust the auto vacuuming parameters described there to obtain the best results for your situation.
+If not sufficient due to very active database  replace the daemon's activities with manually-managed VACUUM commands.
+which typically are executed according to a schedule by cron or Task Scheduler scripts.
+
+
+
+PostgreSQL databases require periodic maintenance known as vacuuming which is required for optimal performance.
+
+Auto vacuum feature is highly recommended for PostgreSQL to maintain the optimal benefit for the PostgreSQL DB managed instance.
+
+auto vacuum automates the start of the VACUUM and the ANALYZE commands when the vacuum works in auto mode.
+
+autovacuum works on those tables that are very volatile and do have a large number of updated or deleted rows.
+
+autovacuum process helps to To recover or reuse disk space occupied by updated or deleted rows.
+
+
+autovacuum is enabled by default for managed PostgreSQL DB instances.
+
+
+You can  tweak the default autovacuum tuning parameters according to your specific postgtreSQL dataset and load.
+
+below are mentioned some of the important autovacuum postgresql parameters.
+
+
+postgres $ psql
+# SELECT short_desc, name, setting, unit
+FROM pg_settings
+WHERE name IN (
+'autovacuum_max_workers',
+'autovacuum_analyze_threshold',
+'autovacuum_analyze_scale_factor',
+'autovacuum_vacuum_threshold',
+'autovacuum_vacuum_scale_factor',
+'maintenance_work_mem',
+'autovacuum_analyze_scale_factor',
+'autovacuum_naptime',
+'autovacuum_vacuum_threshold',
+'vacuum_cost_limit',
+'autovacuum_freeze_max_age',
+'vacuum_freeze_min_age');
+
+short_desc                                         |              name               |  setting  | unit
+-------------------------------------------------------------------------------------------+---------------------------------+-----------+------
+Number of tuple inserts, updates, or deletes prior to analyze as a fraction of reltuples. | autovacuum_analyze_scale_factor | 0.1       |
+Minimum number of tuple inserts, updates, or deletes prior to analyze.                    | autovacuum_analyze_threshold    | 50        |
+Age at which to autovacuum a table to prevent transaction ID wraparound.                  | autovacuum_freeze_max_age       | 200000000 |
+Sets the maximum number of simultaneously running autovacuum worker processes.            | autovacuum_max_workers          | 3         |
+Time to sleep between autovacuum runs.                                                    | autovacuum_naptime              | 60        | s
+Number of tuple updates or deletes prior to vacuum as a fraction of reltuples.            | autovacuum_vacuum_scale_factor  | 0.2       |
+Minimum number of tuple updates or deletes prior to vacuum.                               | autovacuum_vacuum_threshold     | 50        |
+Sets the maximum memory to be used for maintenance operations.                            | maintenance_work_mem            | 65536     | kB
+Vacuum cost amount available before napping.                                              | vacuum_cost_limit               | 200       |
+Minimum age at which VACUUM should freeze a table row.                                    | vacuum_freeze_min_age           | 50000000  |
+(10 rows)
+
+
+If there is a performance issue or pressure on I/O then need to check if auto vacuuming running?
+
+SELECT datname, usename, pid, state,  current_timestamp - xact_start AS xact_runtime, query
+FROM pg_stat_activity
+WHERE upper(query) LIKE '%VACUUM%'
+ORDER BY xact_start;
+
+
+datname  | usename  |  pid   | state  | xact_runtime |                                            query
+-----------+----------+--------+--------+--------------+---------------------------------------------------------------------------------------------
+dvdrental | postgres | 240298 | active | 00:00:00     | SELECT datname, usename, pid, state,  current_timestamp - xact_start AS xact_runtime, query+
+|          |        |        |              | FROM pg_stat_activity                                                                      +
+|          |        |        |              | WHERE upper(query) LIKE '%VACUUM%'                                                         +
+|          |        |        |              | ORDER BY xact_start;
+(1 row)
+
+
+If you see results like
+
+datname | usename  |  pid  |       xact_runtime      | query  
+--------+----------+-------+-------------------------+----------------------------------------------------------------------------------------------
+dvdrental    | postgres | 45187 | 2 days 10:22:10.12356 | autovacuum: VACUUM ANALYZE public.actors (to prevent wraparound)
+
+
+Why is auto vacuum running for long?
+One of the reasons is due to the very small value of the  maintenance_work_mem
+
+What is maintenance_work_mem
+
+Memory that you allocate for autovacuum process which is  to used to scan a table and to hold all the row IDs that which are considered as a candidate for  vacuum.
+
+Setting  the value of the maintenance_work_mem parameter very less,
+it lead the  vacuum process  to scan the table many  times to complete the vacuum process.
+multiple scans of table due to vacuum can have a negative impact on performance.
+
+maintenance_work_mem (integer)
+
+Specifies the maximum amount of memory to be used by maintenance operations,
+such as VACUUM &CREATE INDEX etc.
+If this value is specified without units, it is taken as kilobytes.
+It defaults to 64 megabytes (64MB).
+Since only one of these operations can be executed at a time by a database session,
+and an installation normally doesn't have many of them running concurrently,
+it's safe to set this value significantly larger than work_mem.
+Larger settings might improve performance for vacuuming and for restoring database dumps.
+
+Note that when auto vacuum runs, up to autovacuum_max_workers times this memory may be allocated,
+so be careful not to set the default value too high.
+It may be useful to control for this by separately setting autovacuum_work_mem.
+
+Note that for the collection of dead tuple identifiers,
+VACUUM is only able to utilize up to a maximum of 1GB of memory.
+
+How to allocate memory for auto vacuum process ?
+
+For large hosts set the maintenance_work_mem parameter to a value upto 2 GB.
+For large hosts set the parameter to a value between 2 to 4 GB .
+The value you set for this parameter should depend on the workload.
+
+How to verify the tables required the vacuuming
+
+SQL to show number of unvacuumed transactions in a database.
+
+SELECT datname, age(datfrozenxid) FROM pg_database ORDER BY age(datfrozenxid) desc;
+
+When the age of a database reaches 2 billion transaction IDs,
+transaction ID (XID) wraparound occurs and the database becomes read-only.
+This query can be used to produce a metric and run a few times a day.
+By default, autovacuum is set to keep the age of transactions to no more than 200,000,000
+
+Set  autovacuum_freeze_max_age = 200 million (transactions)
+
+Performing a manual vacuum freeze
+
+in addition to autovacuum  to Volatile tables, perform a manual vacuum freeze regularly during a maintenance window,
+
+You might want to perform a manual vacuum on a table that has a vacuum process already running.
+This is useful if you have identified a table with an age approaching 2 billion transactions
+(or above any threshold you are monitoring like no of tupple of % of the row modified).
+
+maintenance_work_mem parameter is very  small
+
+You cant recycle the instance to increase the  maintenance_work_mem
+
+table is the problem and notice a long running autovacuum session
+
+1) SELECT datname, usename, pid, current_timestamp - xact_start
+AS xact_runtime, query
+FROM pg_stat_activity WHERE upper(query) LIKE '%VACUUM%' ORDER BY
+xact_start;
+this will show PID of the session having autovacuum process .
+
+
+2) If table size is large set below value
+
+In session two, calculate the amount of memory you need for this operation. In this example, we determine that we can afford to use up to 2 GB of memory for this operation, so we set maintenance_work_mem for the current session to 2 GB.
+
+set maintenance_work_mem='2 to 4 GB';
+
+set maintenance_work_mem='128 MB';
+3)psql # \timing on
+psql #vacuum freeze verbose actors;
+
+4) kill autovacuum if running since long
+select * from pg_stat_activity;
+SELECT pg_terminate_backend('30844');
+
+5) Autovacuum restarts immediately because this table is probably the highest on its list of work.
+Initiate your vacuum freeze verbose command in putty session 2 and then terminate the auto vacuum process in putty session 1.

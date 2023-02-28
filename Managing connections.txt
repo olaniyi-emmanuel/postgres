@@ -1,0 +1,52 @@
+How Connections Are Established
+
+PostgreSQL has client/server model and it used "process per user".
+That means One client process connected and equal to one server process.
+There is no forecasting like how many connections will happen,
+PostgreSQL uses a master process that spawns a new server process every time a connection is requested.
+
+This master process is called postgres that allows incoming connections.
+For a new connection requested/attempted the postgres process spawns a new server process.
+The server tasks communicate with each other using semaphores and shared memory to ensure data integrity
+throughout concurrent data access.
+
+The client process can be any program that understands the PostgreSQL protocol
+
+Post connection the client process can send a query to the backend (server).
+The query is transmitted using plain text, i.e., there is no parsing done in the frontend (client).
+The server parses the query, creates an execution plan,
+executes the plan, and returns the retrieved rows to the client by transmitting them over the established connection.
+
+
+To read data/write data from the PostgreSQL application has to establish the connections.
+Every connection in PostgreSQL incurs overhead on memory and process parameter  ;
+PostgreSQL can only handle an only fixed number of connections.
+Post   that, it refuses connections. PostgreSQL  connections can be in Postgresql.conf.
+
+Status of connection in PostgreSQL
+
+1. active: Active and making transactions with PostgreSQL
+2. idle: This indicates that the connection is idle and we need to track these connections based on the time that they have been idle.
+3. idle in a transaction: This indicates the backend is in a transaction, but it is currently not doing anything and could be waiting for input from the end-user.
+4. idle in transaction (aborted): This state is similar to idle in the transaction, except one of the statements in the transaction caused an error. This also needs to be monitored based on the time since it has been idle.
+
+Find the status of the ideal connection
+
+show max_connections;
+Select count(*) from pg_stat_activity where state='idle';
+Select * from pg_stat_activity where state='idle';
+
+Select usename,application_name,pid,backend_start, state_change, state from pg_stat_activity where state='idle';
+
+Kill/terminate unrequired connection
+
+find out the pid of the query not doing anything and try to clean it up from postgresql.
+
+psql # select  * from
+(select count(*) used from pg_stat_activity) query_1,
+(select setting::int res_for_super from pg_settings where name=$$superuser_reserved_connections$$) query_2,
+(select setting::int max_conn from pg_settings where name=$$max_connections$$) query_3;
+
+psql #Select usename,application_name,pid,backend_start, state_change, state from pg_stat_activity where state='idle';
+
+psql # SELECT pg_terminate_backend(pid);

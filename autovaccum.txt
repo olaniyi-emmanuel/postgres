@@ -1,0 +1,161 @@
+Vaccum and autovaccum in postgresql
+It automates the execution of VACUUM and ANALYZE commands.
+
+The VACUUM : reclaim storage by removing obsolete data or tuples from the PostgreSQL database.
+
+Whenever a record is deleted,
+
+it does not create an extra space in the system.
+It creates what is called a "dead tuple".
+If there is no more dependency on those tuples by the running transactions,
+PostgreSQL cleans it up using a process called VACUUM.
+The space used up by those tuples are sometimes called "Bloat".
+
+VACUUM:
+
+It is a manual command.
+
+Vacuum will remove dead tuples both from the table and indexes – it will not return the disk space back to the OS, but it will make it usable for new rows.
+
+Don't run at transaction when transaction time it will take higher CPU and I/O usage on the system.
+
+you may run it only once a day/week when less transaction probably night, in which case you’ll probably accumulate more dead tuples.
+
+VACUUM FULL:
+
+VACUUM FULL reclaims  storage to the OS.
+
+Causes exclusive lock on the table, blocking all operations (including SELECT statement).
+
+A copy of the table is created , doubling the storage requirement .
+
+Consider only if you have enough storage.
+
+
+
+Autovaccum
+
+Vaccuum  done automatically by the database is called autovaccum.
+
+sudo su - postgres
+
+psql
+
+password
+
+postgres=# SELECT name, setting FROM pg_settings WHERE name='autovacuum';
+
+    name    | setting
+
+------------+---------
+
+ autovacuum | on
+
+(1 row)
+
+Autovaccum parameters as mentioned in postgresql.conf file
+
+#------------------------------------------------------------------------------
+
+# AUTOVACUUM PARAMETERS
+
+#------------------------------------------------------------------------------
+
+autovacuum = on                        # Enable autovacuum subprocess?  'on'
+
+       # requires track_counts to also be on.
+
+log_autovacuum_min_duration = -1       # -1 disables, 0 logs all actions and
+
+       # their durations, > 0 logs only
+
+       # actions running at least this number
+
+       # of milliseconds.
+
+autovacuum_max_workers = 3             # max number of autovacuum subprocesses
+
+       # (change requires restart)
+
+autovacuum_naptime = 1min              # time between autovacuum runs
+
+
+
+autovacuum_vacuum_threshold = 50       # min number of row updates before vacuum
+
+autovacuum_analyze_threshold = 50      # min number of row updates before analyze
+
+autovacuum_vacuum_scale_factor = 0.2   # fraction of table size before vacuum
+
+autovacuum_analyze_scale_factor = 0.1  # fraction of table size before analyze
+
+autovacuum_freeze_max_age = 200000000  # maximum XID age before forced vacuum
+
+       # (change requires restart)
+
+autovacuum_multixact_freeze_max_age = 400000000
+
+       # maximum multixact age
+
+       # before forced vacuum
+
+       # (change requires restart)
+
+autovacuum_vacuum_cost_delay = 20ms    # default vacuum cost delay for
+
+       # autovacuum, in milliseconds;
+
+       # -1 means use vacuum_cost_delay
+
+autovacuum_vacuum_cost_limit = -1      # default vacuum cost limit for
+
+       # autovacuum, -1 means use
+
+       # vacuum_cost_limit
+
+
+
+Why Postgresql creates vaccum?
+
+Due to multi-version concurrency control (MVCC) and to  ensure data consistency and accessibility in high-concurrency environments.
+
+it operates in its own snapshot of the database.
+
+That means whenever any record is deleted,  instead of actually deleting that , a dead row (called dead tuple)
+
+
+
+Functions of Vaccum process ?
+
+It marks the dead tuples for reusage.
+avoids Transaction ID Wraparound Failures.
+It updates the visibility map.
+ANALYZE process with vacuum updates the statistics of all the tables.
+
+
+How to perform VACUUM manually for all tables. ?
+
+postgres=# \c dvdrental;
+
+dvdrental=# VACUUM (VERBOSE, ANALYZE);
+
+--How to find out the Dead Tuples ?
+
+dvdrental=#SELECT relname, n_dead_tup FROM pg_stat_user_tables;
+
+--How to calculate the space usage by each table ?
+
+SELECT relname AS "table_name", pg_size_pretty(pg_table_size(pgc.oid)) AS "space_used" FROM pg_class AS pgc LEFT JOIN pg_namespace AS pgns ON (pgns.oid = pgc.relnamespace) WHERE nspname NOT IN ('pg_catalog', 'information_schema') AND nspname !~ '^pg_toast' AND relkind IN ('r') ORDER BY pg_table_size(pgc.oid) DESC LIMIT 1;
+
+--How to find the Autovacuum executed last time ?
+
+SELECT relname, last_vacuum, last_autovacuum FROM pg_stat_user_tables;
+
+ps -axww | grep autovacuum
+
+
+
+The Statistics are gathered by the ANALYZE ?
+
+schedule a database-wide ANALYZE once a day at a low-usage time of day
+
